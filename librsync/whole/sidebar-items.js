@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["delta","Generates a delta between a signature and a new file streams."],["patch","Applies a patch, relative to a basis, into an output stream."],["signature","Generates the signature of a basis input, by using default settings."],["signature_with_options","Generates the signature of a basis input, and writes it out to an output stream."]]});

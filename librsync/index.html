@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `librsync` crate.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, librsync">
+
+    <title>librsync - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../rustdoc.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <nav class="sidebar">
+        
+        <p class='location'></p><script>window.sidebarCurrent = {name: 'librsync', ty: 'mod', relpath: '../'};</script>
+    </nav>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press ‘S’ to search, ‘?’ for more options…"
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Crate <a class='mod' href=''>librsync</a></span><span class='out-of-band'><span id='render-detail'>
+            <a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">
+                [<span class='inner'>&#x2212;</span>]
+            </a>
+        </span><a id='src-0' class='srclink' href='../src/librsync/src/lib.rs.html#1-582' title='goto source code'>[src]</a></span></h1>
+<div class='docblock'><p>librsync bindings for Rust.</p>
+
+<p>This library contains bindings to librsync <a href="http://librsync.sourcefrog.net/">1</a>, encapsulating the algorithms of the rsync
+protocol, which computes differences between files efficiently.</p>
+
+<p>The rsync protocol, when computes differences, does not require the presence of both files.
+It needs instead the new file and a set of checksums of the first file (the signature).
+Computed differences can be stored in a delta file. The rsync protocol is then able to
+reproduce the new file, by having the old one and the delta.</p>
+
+<h1 id='overview-of-types-and-modules' class='section-header'><a href='#overview-of-types-and-modules'>Overview of types and modules</a></h1>
+<p>This crate provides the streaming operations to produce signatures, delta and patches in the
+top-level module with <code>Signature</code>, <code>Delta</code> and <code>Patch</code> structs. Those structs take some input
+stream (<code>Read</code> or <code>Read + Seek</code> traits) and implement another stream (<code>Read</code> trait) from which
+the output can be read.</p>
+
+<p>Higher level operations are provided within the <code>whole</code> submodule. If the application does not
+need fine-grained control over IO operations, <code>signature</code>, <code>delta</code> and <code>patch</code> functions can be
+used. Those functions apply the results to an output stream (implementing the <code>Write</code> trait)
+in a single call.</p>
+
+<h1 id='example-streams' class='section-header'><a href='#example-streams'>Example: streams</a></h1>
+<p>This example shows how to go trough the streaming APIs, starting from an input string and a
+modified string which act as old and new files. The example simulates a real world scenario, in
+which the signature of a base file is computed, used as input to compute differencies between
+the base file and the new one, and finally the new file is reconstructed, by using the base
+file and the delta.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::<span class='ident'>prelude</span>::<span class='op'>*</span>;
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::<span class='ident'>Cursor</span>;
+<span class='kw'>use</span> <span class='ident'>librsync</span>::{<span class='ident'>Delta</span>, <span class='ident'>Patch</span>, <span class='ident'>Signature</span>};
+
+<span class='kw'>let</span> <span class='ident'>base</span> <span class='op'>=</span> <span class='string'>&quot;base file&quot;</span>.<span class='ident'>as_bytes</span>();
+<span class='kw'>let</span> <span class='ident'>new</span> <span class='op'>=</span> <span class='string'>&quot;modified base file&quot;</span>.<span class='ident'>as_bytes</span>();
+
+<span class='comment'>// create signature starting from base file</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>sig</span> <span class='op'>=</span> <span class='ident'>Signature</span>::<span class='ident'>new</span>(<span class='ident'>base</span>).<span class='ident'>unwrap</span>();
+<span class='comment'>// create delta from new file and the base signature</span>
+<span class='kw'>let</span> <span class='ident'>delta</span> <span class='op'>=</span> <span class='ident'>Delta</span>::<span class='ident'>new</span>(<span class='ident'>new</span>, <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>sig</span>).<span class='ident'>unwrap</span>();
+<span class='comment'>// create and store the new file from the base one and the delta</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>patch</span> <span class='op'>=</span> <span class='ident'>Patch</span>::<span class='ident'>new</span>(<span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>base</span>), <span class='ident'>delta</span>).<span class='ident'>unwrap</span>();
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>computed_new</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+<span class='ident'>patch</span>.<span class='ident'>read_to_end</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>computed_new</span>).<span class='ident'>unwrap</span>();
+
+<span class='comment'>// test whether the computed file is exactly the new file, as expected</span>
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>computed_new</span>, <span class='ident'>new</span>);</pre>
+
+<p>Note that intermediate results are not stored in temporary containers. This is possible because
+the operations implement the <code>Read</code> trait. In this way the results does not need to be fully in
+memory, during computation.</p>
+
+<h1 id='example-whole-file-api' class='section-header'><a href='#example-whole-file-api'>Example: whole file API</a></h1>
+<p>This example shows how to go trough the whole file APIs, starting from an input string and a
+modified string which act as old and new files. Unlike the streaming example, here we call a
+single function, to get the computation result of signature, delta and patch operations. This
+is convenient when an output stream (like a network socket or a file) is used as output for an
+operation.</p>
+
+<pre class='rust rust-example-rendered'>
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>io</span>::<span class='ident'>Cursor</span>;
+<span class='kw'>use</span> <span class='ident'>librsync</span>::<span class='ident'>whole</span>::<span class='op'>*</span>;
+
+<span class='kw'>let</span> <span class='ident'>base</span> <span class='op'>=</span> <span class='string'>&quot;base file&quot;</span>.<span class='ident'>as_bytes</span>();
+<span class='kw'>let</span> <span class='ident'>new</span> <span class='op'>=</span> <span class='string'>&quot;modified base file&quot;</span>.<span class='ident'>as_bytes</span>();
+
+<span class='comment'>// signature</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>sig</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+<span class='ident'>signature</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>base</span>), <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>sig</span>).<span class='ident'>unwrap</span>();
+
+<span class='comment'>// delta</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>dlt</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+<span class='ident'>delta</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>new</span>), <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>sig</span>), <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>dlt</span>).<span class='ident'>unwrap</span>();
+
+<span class='comment'>// patch</span>
+<span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>out</span> <span class='op'>=</span> <span class='ident'>Vec</span>::<span class='ident'>new</span>();
+<span class='ident'>patch</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>base</span>), <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Cursor</span>::<span class='ident'>new</span>(<span class='ident'>dlt</span>), <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>out</span>).<span class='ident'>unwrap</span>();
+
+<span class='macro'>assert_eq</span><span class='macro'>!</span>(<span class='ident'>out</span>, <span class='ident'>new</span>);</pre>
+</div><h2 id='modules' class='section-header'><a href="#modules">Modules</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='mod' href='whole/index.html'
+                               title='librsync::whole'>whole</a></td>
+                        <td class='docblock short'>
+                             <p>Process whole files in a single call.</p>
+                        </td>
+                    </tr>
+                </table><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.Delta.html'
+                               title='librsync::Delta'>Delta</a></td>
+                        <td class='docblock short'>
+                             <p>A struct to generate a delta between two files.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.Patch.html'
+                               title='librsync::Patch'>Patch</a></td>
+                        <td class='docblock short'>
+                             <p>A struct to apply a delta to a basis file, to recreate the new file.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='struct' href='struct.Signature.html'
+                               title='librsync::Signature'>Signature</a></td>
+                        <td class='docblock short'>
+                             <p>A struct to generate a signature.</p>
+                        </td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.Error.html'
+                               title='librsync::Error'>Error</a></td>
+                        <td class='docblock short'>
+                             <p>Enumeration of all possible errors in this crate.</p>
+                        </td>
+                    </tr>
+                
+                    <tr class=' module-item'>
+                        <td><a class='enum' href='enum.SignatureType.html'
+                               title='librsync::SignatureType'>SignatureType</a></td>
+                        <td class='docblock short'>
+                             <p>The signature type.</p>
+                        </td>
+                    </tr>
+                </table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                    <tr class=' module-item'>
+                        <td><a class='type' href='type.Result.html'
+                               title='librsync::Result'>Result</a></td>
+                        <td class='docblock short'>
+                             <p>A <code>Result</code> type alias for this crate&#39;s <code>Error</code> type.</p>
+                        </td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <aside id="help" class="hidden">
+        <div>
+            <h1 class="hidden">Help</h1>
+
+            <div class="shortcuts">
+                <h2>Keyboard Shortcuts</h2>
+
+                <dl>
+                    <dt>?</dt>
+                    <dd>Show this help dialog</dd>
+                    <dt>S</dt>
+                    <dd>Focus the search field</dd>
+                    <dt>&larrb;</dt>
+                    <dd>Move up in search results</dd>
+                    <dt>&rarrb;</dt>
+                    <dd>Move down in search results</dd>
+                    <dt>&#9166;</dt>
+                    <dd>Go to active search result</dd>
+                </dl>
+            </div>
+
+            <div class="infos">
+                <h2>Search Tricks</h2>
+
+                <p>
+                    Prefix searches with a type followed by a colon (e.g.
+                    <code>fn:</code>) to restrict the search to a given type.
+                </p>
+
+                <p>
+                    Accepted types are: <code>fn</code>, <code>mod</code>,
+                    <code>struct</code>, <code>enum</code>,
+                    <code>trait</code>, <code>type</code>, <code>macro</code>,
+                    and <code>const</code>.
+                </p>
+
+                <p>
+                    Search functions by type signature (e.g.
+                    <code>vec -> usize</code> or <code>* -> vec</code>)
+                </p>
+            </div>
+        </div>
+    </aside>
+
+    
+
+    <script>
+        window.rootPath = "../";
+        window.currentCrate = "librsync";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
+    
+    <script defer src="../search-index.js"></script>
+</body>
+</html>
